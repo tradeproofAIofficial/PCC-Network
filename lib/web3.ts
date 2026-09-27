@@ -6,12 +6,22 @@ export const PCC_CONTRACT_ABI = [
   "function lockContract(bytes32 contractId, bytes32 preCommitment, bytes32 methodologyHash)",
 ];
 
+type EthereumWindow = Window & {
+  ethereum?: unknown;
+};
+
 export async function connectWallet() {
-  if (typeof window === "undefined" || !window.ethereum) {
+  if (typeof window === "undefined") {
+    throw new Error("Wallet connection is only available in the browser.");
+  }
+
+  const ethereum = (window as EthereumWindow).ethereum;
+
+  if (!ethereum) {
     throw new Error("No Ethereum wallet detected.");
   }
 
-  const provider = new BrowserProvider(window.ethereum);
+  const provider = new BrowserProvider(ethereum as never);
 
   await provider.send("eth_requestAccounts", []);
 
