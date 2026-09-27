@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { calculatePCC } from "@/lib/counterfactual";
+import { createCommitmentHash } from "@/lib/commitment";
 
 export default function Home() {
   const [contractName, setContractName] = useState(
@@ -11,7 +12,10 @@ export default function Home() {
   const [observed, setObserved] = useState(127000);
   const [counterfactual, setCounterfactual] = useState(108000);
   const [uncertainty, setUncertainty] = useState(3200);
+
   const [locked, setLocked] = useState(false);
+  const [commitmentHash, setCommitmentHash] = useState("");
+  const [hashing, setHashing] = useState(false);
 
   const result = useMemo(
     () =>
@@ -25,14 +29,43 @@ export default function Home() {
     [baseline, observed, counterfactual, uncertainty]
   );
 
+  const methodology =
+    "Observed minus counterfactual with precommitted uncertainty and fixed attribution shares.";
+
   const contractId = useMemo(() => {
     const raw = `${contractName}-${baseline}-${counterfactual}`;
+
     return `PCC-${Array.from(raw)
-      .reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) | 0, 0)
+      .reduce(
+        (hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) | 0,
+        0
+      )
       .toString(16)
       .replace("-", "0")
       .toUpperCase()}`;
   }, [contractName, baseline, counterfactual]);
+
+  async function lockContract() {
+    if (locked || hashing) return;
+
+    setHashing(true);
+
+    try {
+      const hash = await createCommitmentHash({
+        contractName,
+        baseline,
+        counterfactual,
+        uncertainty,
+        methodology,
+        attribution: [0.6, 0.25, 0.15],
+      });
+
+      setCommitmentHash(hash);
+      setLocked(true);
+    } finally {
+      setHashing(false);
+    }
+  }
 
   return (
     <main className="dashboard">
@@ -48,9 +81,9 @@ export default function Home() {
 
       <section className="status-bar">
         <span>● SYSTEM ONLINE</span>
-        <span>{locked ? "CONTRACT LOCKED" : "CONTRACT DRAFT"}</span>
+        <span>{locked ? "PRE-COMMITMENT LOCKED" : "CONTRACT DRAFT"}</span>
+        <span>SHA-256 COMMITMENT</span>
         <span>COUNTERFACTUAL ENGINE</span>
-        <span>RECEIPT ENGINE</span>
       </section>
 
       <section className="panel">
@@ -100,16 +133,20 @@ export default function Home() {
 
         <div className="locked">
           {locked
-            ? "🔒 Methodology locked. Contract can no longer be edited."
-            : "🔐 Review the contract before locking the measurement methodology."}
+            ? "🔒 Contract parameters are cryptographically committed."
+            : "🔐 Review all parameters before creating the commitment."}
         </div>
 
         <button
           type="button"
-          onClick={() => setLocked(true)}
-          disabled={locked}
+          onClick={lockContract}
+          disabled={locked || hashing}
         >
-          {locked ? "CONTRACT LOCKED" : "LOCK PRE-COMMITMENT"}
+          {hashing
+            ? "GENERATING COMMITMENT..."
+            : locked
+              ? "PRE-COMMITMENT LOCKED"
+              : "CREATE CRYPTOGRAPHIC COMMITMENT"}
         </button>
       </section>
 
@@ -158,19 +195,34 @@ export default function Home() {
           <div className="receipt-hash">{contractId}</div>
 
           <p>
-            This identifier represents the current PCC contract configuration.
+            This identifies the PCC contract configuration.
           </p>
 
           <div className="locked">
             {locked
-              ? "✓ Pre-commitment recorded locally"
-              : "Waiting for pre-commitment lock"}
+              ? "✓ Contract configuration committed"
+              : "Waiting for cryptographic commitment"}
           </div>
         </div>
       </section>
 
       <section className="panel">
         <p className="eyebrow">STEP 04</p>
+
+        <h2>Pre-Commitment Hash</h2>
+
+        <p>
+          This SHA-256 hash commits the contract parameters and methodology
+          before settlement.
+        </p>
+
+        <div className="receipt-hash">
+          {commitmentHash || "COMMITMENT NOT CREATED"}
+        </div>
+      </section>
+
+      <section className="panel">
+        <p className="eyebrow">STEP 05</p>
 
         <h2>Contributor Attribution</h2>
 
@@ -218,21 +270,25 @@ export default function Home() {
       </section>
 
       <section className="receipt">
-        <p className="eyebrow">COUNTERFACTUAL CONTRIBUTION RECEIPT</p>
+        <p className="eyebrow">
+          COUNTERFACTUAL CONTRIBUTION RECEIPT
+        </p>
 
-        <h2>{locked ? "Receipt Preparation Ready" : "Receipt Locked"}</h2>
+        <h2>
+          {locked
+            ? "Cryptographic Receipt Preparation Ready"
+            : "Receipt Awaiting Commitment"}
+        </h2>
 
         <p>
-          The receipt will contain the contract identity, pre-commitment,
-          evidence references, counterfactual result, attribution and final
-          settlement state.
+          The final CCR will link the contract commitment, evidence,
+          counterfactual calculation, attribution, verification and settlement
+          state.
         </p>
 
         <div className="receipt-hash">
-          {locked
-            ? `PCC-RECEIPT-${Math.abs(result.incrementalEffect)
-                .toString(16)
-                .toUpperCase()}`
+          {commitmentHash
+            ? `CCR-${commitmentHash.slice(0, 32).toUpperCase()}`
             : "AWAITING PRE-COMMITMENT"}
         </div>
       </section>
