@@ -59,6 +59,7 @@ contract PCCContract {
 
         require(c.locked, "not locked");
         require(!c.settled, "already settled");
+        require(msg.sender == c.creator, "not creator");
 
         c.settled = true;
 
