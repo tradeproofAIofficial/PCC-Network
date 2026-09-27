@@ -1,21 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { calculatePCC } from "@/lib/counterfactual";
 
 export default function Home() {
+  const [contractName, setContractName] = useState(
+    "PCC Demonstration Contract"
+  );
   const [baseline, setBaseline] = useState(100000);
   const [observed, setObserved] = useState(127000);
   const [counterfactual, setCounterfactual] = useState(108000);
   const [uncertainty, setUncertainty] = useState(3200);
+  const [locked, setLocked] = useState(false);
 
-  const result = calculatePCC({
-    baseline,
-    observed,
-    counterfactual,
-    uncertainty,
-    contributorShares: [0.6, 0.25, 0.15],
-  });
+  const result = useMemo(
+    () =>
+      calculatePCC({
+        baseline,
+        observed,
+        counterfactual,
+        uncertainty,
+        contributorShares: [0.6, 0.25, 0.15],
+      }),
+    [baseline, observed, counterfactual, uncertainty]
+  );
+
+  const contractId = useMemo(() => {
+    const raw = `${contractName}-${baseline}-${counterfactual}`;
+    return `PCC-${Array.from(raw)
+      .reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) | 0, 0)
+      .toString(16)
+      .replace("-", "0")
+      .toUpperCase()}`;
+  }, [contractName, baseline, counterfactual]);
 
   return (
     <main className="dashboard">
@@ -31,60 +48,88 @@ export default function Home() {
 
       <section className="status-bar">
         <span>● SYSTEM ONLINE</span>
-        <span>PRE-COMMITMENT ENGINE</span>
+        <span>{locked ? "CONTRACT LOCKED" : "CONTRACT DRAFT"}</span>
         <span>COUNTERFACTUAL ENGINE</span>
         <span>RECEIPT ENGINE</span>
       </section>
 
+      <section className="panel">
+        <p className="eyebrow">STEP 01</p>
+
+        <h2>Create Counterfactual Contract</h2>
+
+        <label>
+          Contract Name
+          <input
+            type="text"
+            value={contractName}
+            disabled={locked}
+            onChange={(e) => setContractName(e.target.value)}
+          />
+        </label>
+
+        <label>
+          Baseline Outcome
+          <input
+            type="number"
+            value={baseline}
+            disabled={locked}
+            onChange={(e) => setBaseline(Number(e.target.value))}
+          />
+        </label>
+
+        <label>
+          Counterfactual Outcome
+          <input
+            type="number"
+            value={counterfactual}
+            disabled={locked}
+            onChange={(e) => setCounterfactual(Number(e.target.value))}
+          />
+        </label>
+
+        <label>
+          Measurement Uncertainty
+          <input
+            type="number"
+            value={uncertainty}
+            disabled={locked}
+            onChange={(e) => setUncertainty(Number(e.target.value))}
+          />
+        </label>
+
+        <div className="locked">
+          {locked
+            ? "🔒 Methodology locked. Contract can no longer be edited."
+            : "🔐 Review the contract before locking the measurement methodology."}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setLocked(true)}
+          disabled={locked}
+        >
+          {locked ? "CONTRACT LOCKED" : "LOCK PRE-COMMITMENT"}
+        </button>
+      </section>
+
       <section className="grid">
-        <div className="panel">
-          <h2>Counterfactual Contract</h2>
+        <div className="panel result-panel">
+          <p className="eyebrow">STEP 02</p>
+
+          <h2>Observed Outcome</h2>
 
           <label>
-            Baseline Outcome
-            <input
-              type="number"
-              value={baseline}
-              onChange={(e) => setBaseline(Number(e.target.value))}
-            />
-          </label>
-
-          <label>
-            Observed Outcome
+            Actual Result
             <input
               type="number"
               value={observed}
+              disabled={!locked}
               onChange={(e) => setObserved(Number(e.target.value))}
             />
           </label>
 
-          <label>
-            Counterfactual Outcome
-            <input
-              type="number"
-              value={counterfactual}
-              onChange={(e) => setCounterfactual(Number(e.target.value))}
-            />
-          </label>
-
-          <label>
-            Uncertainty
-            <input
-              type="number"
-              value={uncertainty}
-              onChange={(e) => setUncertainty(Number(e.target.value))}
-            />
-          </label>
-
-          <div className="locked">
-            🔒 Measurement methodology locked before settlement
-          </div>
-        </div>
-
-        <div className="panel result-panel">
-          <p className="eyebrow">VERIFIED RESULT</p>
-
-          <h2>Incremental Effect</h2>
+          <h3>Incremental Effect</h3>
 
           <div className="big-number">
             ${result.incrementalEffect.toLocaleString()}
@@ -101,15 +146,33 @@ export default function Home() {
           </div>
 
           <div className="confidence">
-            Confidence Range: {result.confidenceBand}
+            Uncertainty: {result.confidenceBand}
+          </div>
+        </div>
+
+        <div className="panel">
+          <p className="eyebrow">STEP 03</p>
+
+          <h2>Contract Identity</h2>
+
+          <div className="receipt-hash">{contractId}</div>
+
+          <p>
+            This identifier represents the current PCC contract configuration.
+          </p>
+
+          <div className="locked">
+            {locked
+              ? "✓ Pre-commitment recorded locally"
+              : "Waiting for pre-commitment lock"}
           </div>
         </div>
       </section>
 
       <section className="panel">
-        <p className="eyebrow">ATTRIBUTION</p>
+        <p className="eyebrow">STEP 04</p>
 
-        <h2>Contributor Allocation</h2>
+        <h2>Contributor Attribution</h2>
 
         <div className="contributors">
           <div>
@@ -133,10 +196,12 @@ export default function Home() {
       </section>
 
       <section className="panel">
-        <p className="eyebrow">PROTOCOL CHAIN</p>
+        <p className="eyebrow">PROTOCOL</p>
 
         <div className="chain">
           <span>BASELINE</span>
+          <i>→</i>
+          <span>PRE-COMMITMENT</span>
           <i>→</i>
           <span>INTERVENTION</span>
           <i>→</i>
@@ -144,26 +209,31 @@ export default function Home() {
           <i>→</i>
           <span>COUNTERFACTUAL</span>
           <i>→</i>
-          <span>INCREMENTAL EFFECT</span>
-          <i>→</i>
           <span>ATTRIBUTION</span>
           <i>→</i>
           <span>SETTLEMENT</span>
+          <i>→</i>
+          <span>CCR</span>
         </div>
       </section>
 
       <section className="receipt">
         <p className="eyebrow">COUNTERFACTUAL CONTRIBUTION RECEIPT</p>
 
-        <h2>PCC Receipt Ready</h2>
+        <h2>{locked ? "Receipt Preparation Ready" : "Receipt Locked"}</h2>
 
         <p>
-          The current calculation can be converted into a tamper-evident
-          Counterfactual Contribution Receipt after evidence verification.
+          The receipt will contain the contract identity, pre-commitment,
+          evidence references, counterfactual result, attribution and final
+          settlement state.
         </p>
 
         <div className="receipt-hash">
-          PCC-DEMO-{Math.abs(result.incrementalEffect).toString(16).toUpperCase()}
+          {locked
+            ? `PCC-RECEIPT-${Math.abs(result.incrementalEffect)
+                .toString(16)
+                .toUpperCase()}`
+            : "AWAITING PRE-COMMITMENT"}
         </div>
       </section>
     </main>
