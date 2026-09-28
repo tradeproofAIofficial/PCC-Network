@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { keccak256, toUtf8Bytes } from "ethers";
 import { calculatePCC } from "@/lib/counterfactual";
 import { createCommitmentHash } from "@/lib/commitment";
+import { getPCCContract } from "@/lib/web3";
 
 export default function Home() {
   const [contractName, setContractName] = useState(
@@ -15,7 +17,10 @@ export default function Home() {
 
   const [locked, setLocked] = useState(false);
   const [commitmentHash, setCommitmentHash] = useState("");
+  const [transactionHash, setTransactionHash] = useState("");
+  const [walletAddress, setWalletAddress] = useState("");
   const [hashing, setHashing] = useState(false);
+  const [error, setError] = useState("");
 
   const result = useMemo(
     () =>
@@ -49,6 +54,8 @@ export default function Home() {
     if (locked || hashing) return;
 
     setHashing(true);
+    setError("");
+    setTransactionHash("");
 
     try {
       const hash = await createCommitmentHash({
@@ -60,8 +67,36 @@ export default function Home() {
         attribution: [0.6, 0.25, 0.15],
       });
 
+      const contract = await getPCCContract();
+
+      const signer = await contract.runner?.getAddress?.();
+
+      if (signer) {
+        setWalletAddress(signer);
+      }
+
+      const contractIdHash = keccak256(toUtf8Bytes(contractId));
+      const methodologyHash = keccak256(toUtf8Bytes(methodology));
+
+      const transaction = await contract.lockContract(
+        contractIdHash,
+        `0x${hash}`,
+        methodologyHash
+      );
+
+      setTransactionHash(transaction.hash);
+
+      await transaction.wait();
+
       setCommitmentHash(hash);
       setLocked(true);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Blockchain transaction failed.";
+
+      setError(message);
     } finally {
       setHashing(false);
     }
@@ -81,8 +116,10 @@ export default function Home() {
 
       <section className="status-bar">
         <span>● SYSTEM ONLINE</span>
-        <span>{locked ? "PRE-COMMITMENT LOCKED" : "CONTRACT DRAFT"}</span>
-        <span>SHA-256 COMMITMENT</span>
+        <span>
+          {locked ? "PRE-COMMITMENT LOCKED" : "CONTRACT DRAFT"}
+        </span>
+        <span>BASE SEPOLIA</span>
         <span>COUNTERFACTUAL ENGINE</span>
       </section>
 
@@ -133,8 +170,8 @@ export default function Home() {
 
         <div className="locked">
           {locked
-            ? "🔒 Contract parameters are cryptographically committed."
-            : "🔐 Review all parameters before creating the commitment."}
+            ? "🔒 Contract parameters are cryptographically committed on Base Sepolia."
+            : "🔐 Review all parameters before creating the blockchain commitment."}
         </div>
 
         <button
@@ -143,11 +180,29 @@ export default function Home() {
           disabled={locked || hashing}
         >
           {hashing
-            ? "GENERATING COMMITMENT..."
+            ? "SUBMITTING TO BASE SEPOLIA..."
             : locked
               ? "PRE-COMMITMENT LOCKED"
-              : "CREATE CRYPTOGRAPHIC COMMITMENT"}
+              : "CREATE BLOCKCHAIN COMMITMENT"}
         </button>
+
+        {walletAddress && (
+          <p>
+            Wallet: <strong>{walletAddress}</strong>
+          </p>
+        )}
+
+        {transactionHash && (
+          <p>
+            Transaction: <strong>{transactionHash}</strong>
+          </p>
+        )}
+
+        {error && (
+          <div className="locked">
+            Transaction error: {error}
+          </div>
+        )}
       </section>
 
       <section className="grid">
@@ -200,8 +255,8 @@ export default function Home() {
 
           <div className="locked">
             {locked
-              ? "✓ Contract configuration committed"
-              : "Waiting for cryptographic commitment"}
+              ? "✓ Contract configuration committed on Base Sepolia"
+              : "Waiting for blockchain commitment"}
           </div>
         </div>
       </section>
