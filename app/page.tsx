@@ -67,14 +67,13 @@ export default function Home() {
         attribution: [0.6, 0.25, 0.15],
       });
 
-      const contract = await getPCCContract();
 
-      const signer = await contract.runner?.getAddress?.();
+const contract = await getPCCContract();
 
-      if (signer) {
-        setWalletAddress(signer);
-      }
+const { connectWallet } = await import("@/lib/web3");
+const wallet = await connectWallet();
 
+setWalletAddress(wallet.address);
       const contractIdHash = keccak256(toUtf8Bytes(contractId));
       const methodologyHash = keccak256(toUtf8Bytes(methodology));
 
