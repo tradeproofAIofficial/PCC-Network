@@ -1,6 +1,6 @@
 import { BrowserProvider, Contract } from "ethers";
 
-export const PCC_CONTRACT_ADDRESS =
+ export const PCC_CONTRACT_ADDRESS =
   "0xd8b934580fcE35a11B58C6D73aDeE468a2833fa8";
 
 export const PCC_CONTRACT_ABI = [
